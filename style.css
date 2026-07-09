@@ -1,0 +1,43 @@
+#chatsy_settings label {
+    display: block;
+    font-weight: bold;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+#chatsy_settings small {
+    display: block;
+    opacity: .7;
+    margin-bottom: 6px;
+}
+
+#chatsy_settings input[type="text"],
+#chatsy_settings input[type="number"],
+#chatsy_settings select {
+    width: 100%;
+    margin-bottom: 4px;
+    box-sizing: border-box;
+}
+
+#chatsy_settings input[type="checkbox"] {
+    width: auto;
+}
+
+.chatsy-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.chatsy-row input {
+    flex: 1;
+}
+
+.chatsy-small {
+    padding: 2px 10px;
+    font-size: .85em;
+}
+
+#chatsy_run {
+    font-weight: bold;
+}
