@@ -41,6 +41,7 @@
 #chatsy_add_pattern,
 #chatsy_add_keyword,
 #chatsy_run,
+#chatsy_clear_cover,
 #chatsy_chatlist_area button {
     display: inline-flex !important;
     flex-direction: row !important;
@@ -52,6 +53,15 @@
     writing-mode: horizontal-tb !important;
     padding: 4px 12px !important;
     flex: none !important;
+}
+
+#chatsy_cover_file {
+    display: inline-block !important;
+    width: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: static !important;
+    margin-bottom: 6px;
 }
 
 .chatsy-small {
