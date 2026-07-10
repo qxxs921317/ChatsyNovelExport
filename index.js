@@ -161,7 +161,7 @@ function escapeXml(str) {
     return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-async function buildEpub(title, bodyText, coverBytes) {
+async function buildEpub(title, bodyText, coverBytes, coverMime) {
     const zip = new JSZip();
     zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
     zip.file("META-INF/container.xml", `<?xml version="1.0" encoding="UTF-8"?>
@@ -178,8 +178,10 @@ async function buildEpub(title, bodyText, coverBytes) {
 
     let coverManifest = "", coverMeta = "", coverSpineItem = "";
     if (coverBytes) {
-        zip.file("OEBPS/images/cover.png", coverBytes);
-        coverManifest = `<item id="cover-image" href="images/cover.png" media-type="image/png" properties="cover-image"/>
+        const mime = coverMime || "image/png";
+        const ext = mime === "image/jpeg" ? "jpg" : "png";
+        zip.file(`OEBPS/images/cover.${ext}`, coverBytes);
+        coverManifest = `<item id="cover-image" href="images/cover.${ext}" media-type="${mime}" properties="cover-image"/>
     <item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>`;
         coverMeta = `<meta name="cover" content="cover-image"/>`;
         coverSpineItem = `<itemref idref="cover-page" linear="yes"/>`;
@@ -187,7 +189,7 @@ async function buildEpub(title, bodyText, coverBytes) {
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title></head>
 <body style="text-align:center; margin:0; padding:0;">
-  <img src="images/cover.png" alt="cover" style="max-width:100%; max-height:100vh;"/>
+  <img src="images/cover.${ext}" alt="cover" style="max-width:100%; max-height:100vh;"/>
 </body>
 </html>`);
     }
@@ -297,6 +299,41 @@ function downloadText(filename, text) {
     downloadBlob(filename, new Blob([text], { type: "text/plain;charset=utf-8" }));
 }
 
+/* ---------------- 커버 이미지 (수동 선택 vs 아바타 자동) ---------------- */
+
+let manualCoverFile = null; // 세션 동안만 유지 (새로고침하면 초기화, 매번 다시 골라도 됨)
+
+function renderCoverPreview() {
+    const preview = document.getElementById("chatsy_cover_preview");
+    if (!preview) return;
+    preview.innerHTML = "";
+    if (manualCoverFile) {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(manualCoverFile);
+        img.style.maxWidth = "100px";
+        img.style.borderRadius = "6px";
+        img.style.display = "block";
+        preview.appendChild(img);
+        const cap = document.createElement("small");
+        cap.textContent = "직접 선택한 커버: " + manualCoverFile.name;
+        preview.appendChild(cap);
+    } else {
+        const cap = document.createElement("small");
+        cap.textContent = "커버 미선택 → 캐릭터 아바타 자동 사용";
+        preview.appendChild(cap);
+    }
+}
+
+async function resolveCoverImage(character) {
+    if (manualCoverFile) {
+        const bytes = await manualCoverFile.arrayBuffer();
+        const mime = manualCoverFile.type || (manualCoverFile.name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+        return { bytes, mime };
+    }
+    const bytes = await fetchAvatarBytes(character.avatar);
+    return { bytes, mime: "image/png" };
+}
+
 /* ---------------- 실행 흐름 ---------------- */
 
 async function startExportFlow(settings) {
@@ -386,13 +423,13 @@ async function runExport(list, character, settings) {
         if (typeof JSZip === "undefined") {
             toastr.error("JSZip 로드 실패로 epub을 만들 수 없어.");
         } else {
-            const coverBytes = await fetchAvatarBytes(character.avatar);
+            const { bytes: coverBytes, mime: coverMime } = await resolveCoverImage(character);
             if (out.epubOrig) {
-                const blob = await buildEpub(baseName, original, coverBytes);
+                const blob = await buildEpub(baseName, original, coverBytes, coverMime);
                 downloadBlob(`${baseName}_original.epub`, blob);
             }
             if (out.epubTrans) {
-                const blob = await buildEpub(baseName, translated, coverBytes);
+                const blob = await buildEpub(baseName, translated, coverBytes, coverMime);
                 downloadBlob(`${baseName}_translated.epub`, blob);
             }
         }
@@ -454,8 +491,14 @@ function buildSettingsHtml() {
                 <label style="margin-top:10px;">출력할 파일</label>
                 <label><input type="checkbox" id="chatsy_out_txt_orig" style="width:auto; margin-right:6px;"> txt 원문</label>
                 <label><input type="checkbox" id="chatsy_out_txt_trans" style="width:auto; margin-right:6px;"> txt 번역</label>
-                <label><input type="checkbox" id="chatsy_out_epub_orig" style="width:auto; margin-right:6px;"> epub 원문 (캐릭터 아바타 자동 커버)</label>
-                <label><input type="checkbox" id="chatsy_out_epub_trans" style="width:auto; margin-right:6px;"> epub 번역 (캐릭터 아바타 자동 커버)</label>
+                <label><input type="checkbox" id="chatsy_out_epub_orig" style="width:auto; margin-right:6px;"> epub 원문</label>
+                <label><input type="checkbox" id="chatsy_out_epub_trans" style="width:auto; margin-right:6px;"> epub 번역</label>
+
+                <label style="margin-top:10px;">epub 커버 이미지</label>
+                <small>직접 이미지를 선택하면 그걸 쓰고, 선택 안 하면 캐릭터 아바타를 자동으로 사용해.</small>
+                <input type="file" id="chatsy_cover_file" accept="image/png,image/jpeg,image/jpg">
+                <div id="chatsy_cover_preview" style="margin:6px 0;"></div>
+                <button type="button" id="chatsy_clear_cover" class="menu_button chatsy-small">아바타로 되돌리기</button>
 
                 <button id="chatsy_run" class="menu_button" style="width:100%; margin-top:14px;">📖 소설로 추출</button>
                 <div id="chatsy_chatlist_area" style="margin-top:10px;"></div>
@@ -501,6 +544,17 @@ function bindSettingsUi(settings) {
         syncSettingsFromUi();
         startExportFlow(settings);
     });
+
+    document.getElementById("chatsy_cover_file").addEventListener("change", (e) => {
+        manualCoverFile = e.target.files[0] || null;
+        renderCoverPreview();
+    });
+    document.getElementById("chatsy_clear_cover").addEventListener("click", () => {
+        manualCoverFile = null;
+        document.getElementById("chatsy_cover_file").value = "";
+        renderCoverPreview();
+    });
+    renderCoverPreview();
 }
 
 /* ---------------- 초기화 ---------------- */
